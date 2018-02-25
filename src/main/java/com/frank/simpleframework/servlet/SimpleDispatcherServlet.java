@@ -1,15 +1,14 @@
 package com.frank.simpleframework.servlet;
 
 import com.alibaba.fastjson.JSON;
-import com.frank.simpleframework.context.FrameworkContext;
-import com.frank.simpleframework.context.RequestMapper;
+import com.frank.simpleframework.beans.Controller$$Proxy;
+import com.frank.simpleframework.context.ApplicationContext;
+import com.frank.simpleframework.filter.AbstractFilter;
 import com.frank.simpleframework.interceptor.AbstractInterceptor;
-import com.frank.simpleframework.request.DefaultProcessRequestParameters;
 import com.frank.simpleframework.request.MethodParameter;
-import com.frank.simpleframework.request.ProcessRequestParameters;
+import com.frank.simpleframework.request.RequestContext;
 import com.frank.simpleframework.response.ResponseCode;
 import com.frank.simpleframework.response.ResponseEntity;
-import com.frank.simpleframework.util.PropertiesUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -22,16 +21,13 @@ import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Created by frank on 2017/12/10.
  */
 public class SimpleDispatcherServlet extends HttpServlet {
 
-    public static final String Config_bash_package = "base_package";
-
-    private static FrameworkContext frameworkContext;
+    private static ApplicationContext applicationContext;
 
     private static final Logger logger = LoggerFactory.getLogger(SimpleDispatcherServlet.class);
 
@@ -49,51 +45,66 @@ public class SimpleDispatcherServlet extends HttpServlet {
             if (uri.indexOf("?") != -1) {
                 path = uri.substring(0, uri.indexOf("?"));
             }
-            RequestMapper requestMapper = frameworkContext.getRequestMapper(path);
-            if (null == requestMapper) {
+            Controller$$Proxy controller$$Proxy = applicationContext.getController(path);
+            if (null == controller$$Proxy) {
                 this.outPut(resp, new HashMap() {{
-                    put("code", "1020");
+                    put("code", ResponseCode.RESPONSE_CODE_1002);
                     put("msg", "未找到要访问的服务路径，请检查一下请求路径");
                 }});
                 return;
             }
-            String supportMethod = requestMapper.getSuportMethod().toString();
+
+            String supportMethod = controller$$Proxy.getRequestMethod().name();
             if (supportMethod.equalsIgnoreCase(req.getMethod())) {
-                ProcessRequestParameters processRequestParameters = new DefaultProcessRequestParameters();
-                try {
-                    Method method = requestMapper.getMethod();
-                    AbstractInterceptor before = requestMapper.getBeforeInterceptor();
-                    AbstractInterceptor after = requestMapper.getAfterInterceptor();
-                    if(null != before){
-                        Method beforeMethod = before.getClass().getDeclaredMethod("doInterceptor",HttpServletRequest.class,HttpServletResponse.class);
-                        boolean ifContinue = (boolean) beforeMethod.invoke(before,req,resp);
-                        if(!ifContinue){
-                            this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1000.getCode(), String.format("执行%s.doInterceptor方法未通过",before.getClass().getName()), null));
-                            return;
+                RequestContext requestContext = new RequestContext(applicationContext,req,resp,controller$$Proxy);
+                List<AbstractFilter> filters = applicationContext.getFilters();
+                int flag = 0;
+                for (AbstractFilter filter : filters) {
+                    if(!filter.doFilter(requestContext)){
+                        flag = 1;
+                        break;
+                    }
+                }
+                if(flag == 0){
+                    try {
+                        Method method = controller$$Proxy.getMethod();
+                        AbstractInterceptor before = controller$$Proxy.getBeforeInterceptor();
+                        AbstractInterceptor after = controller$$Proxy.getAfterInterceptor();
+                        if(null != before){
+                            Method beforeMethod = before.getClass().getDeclaredMethod("doInterceptor",RequestContext.class);
+                            boolean ifContinue = (boolean) beforeMethod.invoke(before,requestContext);
+                            if(!ifContinue){
+                                this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1000.getCode(), String.format("执行%s.doInterceptor方法未通过",before.getClass().getName()), null));
+                                return;
+                            }
                         }
+                        Class<?> returnType = method.getReturnType();
+                        List<MethodParameter> parameterList = requestContext.getMethodParameterList();
+                        Object[] values = new Object[parameterList.size()];
+                        for (int i = 0; i < parameterList.size(); i++) {
+                            values[i] = parameterList.get(i).getValue();
+                        }
+                        if ("void".equalsIgnoreCase(returnType.getName())) {
+                            method.invoke(controller$$Proxy.getInstance(), values);
+                        } else {
+                            Object returnVal = method.invoke(controller$$Proxy.getInstance(), values);
+                            this.outPut(resp, returnVal);
+                        }
+                        if(null != after){
+                            Method afterMethod = after.getClass().getDeclaredMethod("doInterceptor",RequestContext.class);
+                            afterMethod.invoke(after,requestContext);
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        logger.error("执行方法异常", e);
+                        this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1001.getCode(), e.getMessage(), null));
+                        return;
                     }
-                    Class<?> returnType = method.getReturnType();
-                    List<MethodParameter> parameterList = processRequestParameters.processParameter(method, req,resp);
-                    Object[] values = new Object[parameterList.size()];
-                    for (int i = 0; i < parameterList.size(); i++) {
-                        values[i] = parameterList.get(i).getValue();
-                    }
-                    if ("void".equalsIgnoreCase(returnType.getName())) {
-                        method.invoke(requestMapper.getObject(), values);
-                    } else {
-                        Object returnVal = method.invoke(requestMapper.getObject(), values);
-                        this.outPut(resp, returnVal);
-                    }
-                    if(null != after){
-                        Method afterMethod = after.getClass().getDeclaredMethod("doInterceptor",HttpServletRequest.class,HttpServletResponse.class);
-                        afterMethod.invoke(after,req,resp);
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                    logger.error("执行方法异常", e);
-                    this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1001.getCode(), e.getMessage(), null));
+                }else{
+                    this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1003.getCode(), ResponseCode.RESPONSE_CODE_1003.getDesc(), null));
                     return;
                 }
+
             } else {
                 this.outPut(resp, new ResponseEntity(ResponseCode.RESPONSE_CODE_1001.getCode(), String.format("暂不支持%s请求方法", req.getMethod()), null));
                 return;
@@ -104,8 +115,6 @@ public class SimpleDispatcherServlet extends HttpServlet {
             result.put("code", ResponseCode.RESPONSE_CODE_1000.getCode());
             result.put("msg", e.getMessage());
             this.outPut(resp, result);
-        } finally {
-
         }
 
     }
@@ -126,29 +135,8 @@ public class SimpleDispatcherServlet extends HttpServlet {
                 "##    ##  ##  ##     ## ##        ##       ##          ##       ##    ##  ##     ## ##     ## ##       ##  ##  ## ##     ## ##    ##  ##   ##  \n" +
                 " ######  #### ##     ## ##        ######## ########    ##       ##     ## ##     ## ##     ## ########  ###  ###   #######  ##     ## ##    ## ";
         logger.info(startImg);
-        System.out.println(startImg);
         logger.info("-----SimpleFramework starts initialization ----");
-        logger.info("start loading simple.properties file");
-        Properties properties = PropertiesUtils.loadProps("/simple.properties");
-        if (properties == null) {
-            logger.error("loading simple.properties fail,please check this properties file exists,System will shutdown");
-            System.exit(-1);
-        }
-        if (!properties.containsKey(Config_bash_package)) {
-            logger.error(String.format("simple.properties can't contain %s property ,System will shutdown", Config_bash_package));
-            System.exit(-1);
-        }
-        FrameworkContext.base_package_path = properties.getProperty(Config_bash_package);
-        frameworkContext = new FrameworkContext();
-        frameworkContext.init(this.getServletConfig());
-        try {
-            frameworkContext.refresh();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-            logger.error("frameworkContext refresh exception", e);
-            System.exit(0);
-        }
-        FrameworkContext.registerBean(frameworkContext);
+        applicationContext = new ApplicationContext(this.getServletContext());
         logger.info("-----SimpleFramework finishes initialization ----");
     }
 

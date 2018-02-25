@@ -2,30 +2,31 @@ package com.frank.simpleframework.request;
 
 import com.alibaba.fastjson.JSON;
 import com.frank.simpleframework.annotation.RequestParameter;
+import com.frank.simpleframework.beans.Controller$$Proxy;
+import com.frank.simpleframework.context.ApplicationContext;
 import com.frank.simpleframework.util.WebUtils;
-import org.apache.commons.lang.ArrayUtils;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.*;
 
 /**
- * Created by Frank （wx:F451209123） on 2017/12/17.
+ * Created by Administrator on 2018/2/25.
  */
-public class DefaultProcessRequestParameters implements ProcessRequestParameters {
+public class RequestContext {
 
-    private static final Logger logger = LoggerFactory.getLogger(DefaultProcessRequestParameters.class);
+    private static final Logger logger = LoggerFactory.getLogger(RequestContext.class);
 
     /**
      * 基本类型、包装类型、String类型
      */
-    private final List<String> types = Arrays.asList("java.lang.Integer",
+    private static final List<String> types = Arrays.asList("java.lang.Integer",
             "java.lang.Double",
             "java.lang.Float",
             "java.lang.Long",
@@ -36,18 +37,37 @@ public class DefaultProcessRequestParameters implements ProcessRequestParameters
             "java.lang.String",
             "int", "double", "long", "short", "byte", "boolean", "char", "float");
 
-    @Override
-    public List<MethodParameter> processParameter(Method method, HttpServletRequest request, HttpServletResponse response) throws IOException {
-        Map complexMap = new HashMap();
+    private ApplicationContext applicationContext;
+
+    private List<MethodParameter> methodParameterList;
+
+    private HttpServletRequest request;
+
+    private HttpServletResponse response;
+
+    private Controller$$Proxy controller$$Proxy;
+
+    public RequestContext(ApplicationContext applicationContext, HttpServletRequest request, HttpServletResponse response,Controller$$Proxy controller$$Proxy) throws IOException {
+        this.applicationContext = applicationContext;
+        this.request = request;
+        this.response = response;
+        this.controller$$Proxy = controller$$Proxy;
+        processParameter();
+    }
+
+
+    private void processParameter() throws IOException {
+        Map parameterMap = new HashMap();
         Enumeration<String> attributes = request.getAttributeNames();
         while (attributes.hasMoreElements()){
             String aName = attributes.nextElement();
-            complexMap.put(aName,request.getAttribute(aName));
+            parameterMap.put(aName,request.getAttribute(aName));
         }
-        this.getParameter(complexMap,WebUtils.getString(request.getInputStream()));
-        this.getParameter(complexMap,request.getQueryString());
-        Parameter[] parameters = method.getParameters();
-        List<MethodParameter> methodParameters = new ArrayList<>();
+
+        this.getParameter(parameterMap, WebUtils.getString(request.getInputStream()));
+        this.getParameter(parameterMap,request.getQueryString());
+        Parameter[] parameters = controller$$Proxy.getMethod().getParameters();
+        methodParameterList = new ArrayList<>();
         for(int i=0;i<parameters.length;i++){
             Parameter parameter = parameters[i];
             RequestParameter requestParameter = parameter.getAnnotation(RequestParameter.class);
@@ -55,14 +75,13 @@ public class DefaultProcessRequestParameters implements ProcessRequestParameters
             Integer index = i;
             if(null != requestParameter){
                 name = requestParameter.name();
-                index = requestParameter.index();
             }
             Object value = null;
             Class<?> type = parameter.getType();
             if (types.contains(type.getName())) {
-                value = complexMap.get(name);
+                value = parameterMap.get(name);
             } else if ("java.util.Date".equalsIgnoreCase(type.getName())) {
-                String val = (String) complexMap.get(name);
+                String val = (String) parameterMap.get(name);
                 if (StringUtils.isNotBlank(val)) {
                     Date date = WebUtils.parseDate(val);
                     if(date == null){
@@ -77,17 +96,16 @@ public class DefaultProcessRequestParameters implements ProcessRequestParameters
             } else if(response.getClass().getName().equalsIgnoreCase(type.getName())){
                 value = response;
             } else {
-                String jsonStr = JSON.toJSONString(complexMap);
+                String jsonStr = JSON.toJSONString(parameterMap);
                 value = JSON.parseObject(jsonStr,type);
             }
             if(requestParameter.isRequired() && value == null){
                 logger.error(String.format("%s参数值缺失",name));
                 throw new RuntimeException(String.format("%s参数值缺失",name));
             }
-            methodParameters.add(new MethodParameter(name,value,index));
+            methodParameterList.add(new MethodParameter(name,value,index));
         }
-        Collections.sort(methodParameters);
-        return methodParameters;
+        Collections.sort(methodParameterList);
     }
 
     private void getParameter(Map<String,Object> map,String queryStr){
@@ -104,4 +122,23 @@ public class DefaultProcessRequestParameters implements ProcessRequestParameters
         }
     }
 
+    public List<MethodParameter> getMethodParameterList() {
+        return methodParameterList;
+    }
+
+    public ApplicationContext getApplicationContext() {
+        return applicationContext;
+    }
+
+    public HttpServletRequest getRequest() {
+        return request;
+    }
+
+    public HttpServletResponse getResponse() {
+        return response;
+    }
+
+    public Controller$$Proxy getController$$Proxy() {
+        return controller$$Proxy;
+    }
 }

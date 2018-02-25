@@ -6,11 +6,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Created by Frank （wx:F451209123） on 2017/12/17.
+ * Created by Administrator on 2018/2/14.
  */
-@Target(ElementType.PARAMETER)
+@Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface RequestParameter {
+public @interface Filter {
+    int order() default 0;
     String name();
-    boolean isRequired() default false;
 }

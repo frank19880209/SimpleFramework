@@ -15,7 +15,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface RequestAction {
 
-    String serviceName();
+    String value() default "";
 
     RequestMethod method() default RequestMethod.GET;
+
+    String consumes() default "application/json";
+
+    String produces() default "application/json";
 }

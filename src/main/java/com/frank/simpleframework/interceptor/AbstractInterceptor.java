@@ -1,5 +1,7 @@
 package com.frank.simpleframework.interceptor;
 
+import com.frank.simpleframework.request.RequestContext;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -10,10 +12,9 @@ public abstract class AbstractInterceptor {
 
     /**
      * 拦截执行方法
-     * @param request 请求对象
-     * @param response 响应对象
+     * @param requestContext 请求上下文
      * @return 返回true 则通过校验拦截 否则校验不通过
      */
-    public abstract boolean doInterceptor(HttpServletRequest request, HttpServletResponse response) throws Exception;
+    public abstract boolean doInterceptor(RequestContext requestContext) throws Exception;
 
 }

@@ -3,9 +3,11 @@ package com.frank.simpleframework.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -17,48 +19,32 @@ public final class PropertiesUtils {
 
     private PropertiesUtils(){}
 
-    private static Properties properties;
-
     /**
      * 加载属性文件
      *
-     * @param filePath 文件路径
+     * @param propertiesFiles 文件路径
      * @return
      */
-    public synchronized static Properties loadProps(String filePath) {
-        if(properties == null){
-            properties = new Properties();
-        }
-        try {
-            String path = Thread.currentThread().getContextClassLoader().getResource(filePath).getPath();
-            InputStream in = new BufferedInputStream(new FileInputStream(path));
-            properties.load(in);
-        } catch (Exception e) {
-            properties = null;
-            logger.error("load props error",e);
+    public synchronized static Map<String,String> loadProps(String ...propertiesFiles) {
+        Map<String,String> properties = new HashMap<>();
+        if(null != propertiesFiles){
+            for (String propertiesFile : propertiesFiles) {
+                Properties prop = new Properties();
+                try {
+                    InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(propertiesFile);
+                    prop.load(is);
+                    Enumeration names = prop.propertyNames();
+                    while (names.hasMoreElements()){
+                        String key=(String) names.nextElement();
+                        String property=prop.getProperty(key);
+                        properties.put(key, property);
+                    }
+                }catch (IOException e) {
+                    e.printStackTrace();
+                    logger.error(String.format("获取配置文件[%s]异常",propertiesFile),e);
+                }
+            }
         }
         return properties;
-    }
-
-    /**
-     * 读取配置文件
-     *
-     * @param key
-     * @return
-     */
-    public static String getString(String key) {
-        return properties.getProperty(key);
-    }
-
-    /**
-     * 更新配置文件
-     *
-     * @param keyname 配置属性
-     * @param keyvalue
-     * @return
-     */
-    public static void updateProperty(String keyname, String keyvalue) {
-        properties.remove(keyname);
-        properties.put(keyname,keyvalue);
     }
 }

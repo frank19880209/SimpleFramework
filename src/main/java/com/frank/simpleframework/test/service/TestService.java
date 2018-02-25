@@ -1,7 +1,7 @@
 package com.frank.simpleframework.test.service;
 
 import com.frank.simpleframework.annotation.Service;
-import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Created by Frank （wx:F451209123） on 2017/12/17.
