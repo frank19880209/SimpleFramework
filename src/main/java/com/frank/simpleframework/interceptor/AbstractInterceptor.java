@@ -2,9 +2,6 @@ package com.frank.simpleframework.interceptor;
 
 import com.frank.simpleframework.request.RequestContext;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 /**
  * Created by Frank （wx:F451209123） on 2017/12/23.
  */

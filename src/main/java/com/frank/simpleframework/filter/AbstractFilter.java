@@ -2,9 +2,6 @@ package com.frank.simpleframework.filter;
 
 import com.frank.simpleframework.request.RequestContext;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-
 /**
  * Created by Administrator on 2018/2/23.
  */
